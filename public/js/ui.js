@@ -238,8 +238,8 @@ class UIManager {
     if (isHost) {
       this.btnStartMatch.disabled = !data.canStart;
       this.lobbyStatusMsg.textContent = data.canStart 
-        ? 'All operatives ready. You can launch match.' 
-        : `Requires at least ${data.settings.minPlayers} ready players to begin.`;
+        ? 'Ready to launch! Click "LAUNCH MATCH" to begin.' 
+        : `Requires at least ${data.settings.minPlayers} players in room to begin.`;
     } else {
       this.lobbyStatusMsg.textContent = 'Waiting for host to launch the match...';
     }

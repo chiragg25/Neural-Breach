@@ -16,6 +16,7 @@ class GameEngine {
     this.assignedTasks = [];
     this.taskProgress = { completed: 0, total: 0, percent: 0 };
 
+    this.lobbyPlayers = [];
     this.players = [];
     this.deadBodies = [];
     this.activeSabotage = null;
@@ -126,6 +127,7 @@ class GameEngine {
     });
 
     this.socket.on('lobby_update', (data) => {
+      this.lobbyPlayers = data.players || [];
       this.ui.updateLobby(data, this.localPlayerId);
     });
 
@@ -320,13 +322,9 @@ class GameEngine {
   }
 
   toggleReady() {
-    const local = this.getLocalPlayer();
-    if (local) {
-      this.socket.emit('set_ready', {
-        roomCode: this.roomCode,
-        isReady: !local.isReady
-      });
-    }
+    this.socket.emit('set_ready', {
+      roomCode: this.roomCode
+    });
   }
 
   startMatch() {
@@ -350,10 +348,10 @@ class GameEngine {
   }
 
   cycleNextColor() {
-    const local = this.getLocalPlayer();
-    if (!local) return;
+    const myPlayer = (this.lobbyPlayers || []).find(p => p.id === this.localPlayerId);
     const colors = ['#00ffcc', '#ff3366', '#ffaa00', '#3399ff', '#cc33ff', '#00ff66', '#ffea00', '#ff66cc'];
-    const currentIdx = colors.indexOf(local.color);
+    const currentColor = myPlayer ? myPlayer.color : colors[0];
+    const currentIdx = colors.indexOf(currentColor);
     const nextColor = colors[(currentIdx + 1) % colors.length];
     this.socket.emit('update_color', { roomCode: this.roomCode, color: nextColor });
   }

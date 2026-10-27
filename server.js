@@ -22,8 +22,14 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// Serve public static files
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve public static files with no-cache headers to prevent stale browser code
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+}));
 
 // API endpoint for server info and network access
 app.get('/api/info', (req, res) => {
@@ -59,6 +65,11 @@ function generateRoomCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return rooms.has(code) ? generateRoomCode() : code;
+}
+
+function getRoomForSocket(socket, roomCode) {
+  const code = (roomCode || socketToRoom.get(socket.id) || '').toUpperCase().trim();
+  return rooms.get(code);
 }
 
 io.on('connection', (socket) => {
@@ -97,6 +108,12 @@ io.on('connection', (socket) => {
         return;
       }
 
+      // If room was pending cleanup due to temporary disconnect, cancel it
+      if (room.cleanupTimer) {
+        clearTimeout(room.cleanupTimer);
+        room.cleanupTimer = null;
+      }
+
       const res = room.addPlayer(socket, playerName, color);
       if (res.success) {
         socketToRoom.set(socket.id, code);
@@ -113,7 +130,7 @@ io.on('connection', (socket) => {
 
   // Add AI Bot (for exhibition solo/duo demonstrations)
   socket.on('add_bot', ({ roomCode }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room && socket.id === room.hostId) {
       room.addBot();
     }
@@ -121,23 +138,27 @@ io.on('connection', (socket) => {
 
   // Remove AI Bot
   socket.on('remove_bot', ({ roomCode, botId }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room && socket.id === room.hostId) {
       room.removeBot(botId);
     }
   });
 
-  // Set Ready status
-  socket.on('set_ready', ({ roomCode, isReady }) => {
-    const room = rooms.get(roomCode);
+  // Set Ready status (auto-toggles or sets explicitly)
+  socket.on('set_ready', (data) => {
+    const room = getRoomForSocket(socket, data ? data.roomCode : null);
     if (room) {
-      room.setPlayerReady(socket.id, isReady);
+      const player = room.players.get(socket.id);
+      if (player) {
+        player.isReady = (data && data.isReady !== undefined) ? !!data.isReady : !player.isReady;
+        room.broadcastLobbyUpdate();
+      }
     }
   });
 
   // Update Player Color
   socket.on('update_color', ({ roomCode, color }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.updatePlayerColor(socket.id, color);
     }
@@ -145,15 +166,15 @@ io.on('connection', (socket) => {
 
   // Toggle Exhibition Mode
   socket.on('toggle_exhibition', ({ roomCode, enabled }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room && socket.id === room.hostId) {
       room.setExhibitionMode(enabled);
     }
   });
 
   // Start Match
-  socket.on('start_match', ({ roomCode }, callback) => {
-    const room = rooms.get(roomCode);
+  socket.on('start_match', (data, callback) => {
+    const room = getRoomForSocket(socket, data ? data.roomCode : null);
     if (!room) {
       if (callback) callback({ success: false, message: 'Room not found' });
       return;
@@ -164,7 +185,7 @@ io.on('connection', (socket) => {
 
   // Player Movement Synchronization
   socket.on('player_move', ({ roomCode, x, y, angle }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.updatePlayerPos(socket.id, x, y, angle);
     }
@@ -172,7 +193,7 @@ io.on('connection', (socket) => {
 
   // Saboteur Neutralize / Eliminate Action
   socket.on('perform_kill', ({ roomCode, targetId }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleKill(socket.id, targetId);
     }
@@ -180,14 +201,14 @@ io.on('connection', (socket) => {
 
   // Vent Conduit Actions
   socket.on('enter_vent', ({ roomCode, ventId }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleVentEnter(socket.id, ventId);
     }
   });
 
   socket.on('exit_vent', ({ roomCode, ventId, targetX, targetY }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleVentExit(socket.id, ventId, targetX, targetY);
     }
@@ -195,7 +216,7 @@ io.on('connection', (socket) => {
 
   // Report Fallen Operative
   socket.on('report_body', ({ roomCode, bodyId }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleReport(socket.id, bodyId);
     }
@@ -203,7 +224,7 @@ io.on('connection', (socket) => {
 
   // Emergency Tribunal Call
   socket.on('call_emergency', ({ roomCode }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleEmergencyMeeting(socket.id);
     }
@@ -211,7 +232,7 @@ io.on('connection', (socket) => {
 
   // Cast Vote
   socket.on('cast_vote', ({ roomCode, targetId }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleVote(socket.id, targetId);
     }
@@ -219,7 +240,7 @@ io.on('connection', (socket) => {
 
   // Trigger Sabotage
   socket.on('trigger_sabotage', ({ roomCode, sabotageType }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleSabotage(socket.id, sabotageType);
     }
@@ -227,7 +248,7 @@ io.on('connection', (socket) => {
 
   // Resolve / Fix Sabotage
   socket.on('fix_sabotage', ({ roomCode, terminalType }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleSabotageFix(socket.id, terminalType);
     }
@@ -235,7 +256,7 @@ io.on('connection', (socket) => {
 
   // Complete Assigned Task
   socket.on('complete_task', ({ roomCode, taskId }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       room.handleTaskComplete(socket.id, taskId);
     }
@@ -243,7 +264,7 @@ io.on('connection', (socket) => {
 
   // Chat message in Meeting
   socket.on('send_chat', ({ roomCode, text, isGhost }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room) {
       const player = room.players.get(socket.id);
       if (player && text && text.trim().length > 0) {
@@ -261,7 +282,7 @@ io.on('connection', (socket) => {
 
   // Return to Lobby after Match
   socket.on('return_to_lobby', ({ roomCode }) => {
-    const room = rooms.get(roomCode);
+    const room = getRoomForSocket(socket, roomCode);
     if (room && socket.id === room.hostId) {
       room.returnToLobby();
     }
@@ -276,12 +297,18 @@ io.on('connection', (socket) => {
         room.removePlayer(socket.id);
         console.log(`[Player Disconnected] ${socket.id} from ${roomCode}`);
         
-        // If room has no human players left, clean up
+        // If room has no human players left, clean up after a 60-second grace period (supports page reloads & mobile screen lock)
         const remainingHumans = Array.from(room.players.values()).filter(p => !p.isBot);
         if (remainingHumans.length === 0) {
-          room.destroy();
-          rooms.delete(roomCode);
-          console.log(`[Room Destroyed] Cleaned up room ${roomCode}`);
+          if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+          room.cleanupTimer = setTimeout(() => {
+            const humansNow = Array.from(room.players.values()).filter(p => !p.isBot);
+            if (humansNow.length === 0) {
+              room.destroy();
+              rooms.delete(roomCode);
+              console.log(`[Room Destroyed] Cleaned up room ${roomCode} after grace period`);
+            }
+          }, 60000);
         }
       }
       socketToRoom.delete(socket.id);
