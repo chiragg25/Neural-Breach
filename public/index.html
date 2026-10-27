@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEURAL BREACH: SYNERGY 2026 | Multiplayer Social Deduction Game</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+</head>
+<body>
+
+  <!-- Fullscreen WebGL / 2D Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- 1. START SCREEN -->
+  <div id="screen-start" class="screen-overlay">
+    <div class="cyber-card start-container">
+      <h1 class="game-title">NEURAL <span>BREACH</span></h1>
+      <p class="subtitle">A Real-Time Multiplayer Social Deduction Experience</p>
+
+      <div class="input-group">
+        <label>OPERATIVE IDENTIFIER</label>
+        <input type="text" id="player-name-input" class="cyber-input" placeholder="Enter Call-sign (e.g., Nova-1)" maxlength="14" value="Operative-1">
+      </div>
+
+      <div class="exhibition-toggle-box">
+        <div class="toggle-label">
+          <div class="toggle-title">EXHIBITION SPEED MODE</div>
+          <div class="toggle-desc">Shorter match timers, fast tasks, 10s cooldowns</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="check-exhibition-mode" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-create-room" class="cyber-btn primary">
+          <span>⚡</span> CREATE ROOM
+        </button>
+      </div>
+
+      <div class="input-group" style="margin-top: 15px;">
+        <label>OR JOIN VIA ROOM CODE</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="room-code-input" class="cyber-input" placeholder="4-LETTER CODE" maxlength="4" style="text-transform: uppercase;">
+          <button id="btn-join-room" class="cyber-btn" style="flex: 0.6;">JOIN</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <button id="btn-how-to-play" class="cyber-btn" style="font-size: 0.8rem; padding: 8px 14px;">
+          <span>📖</span> HOW TO PLAY (30s)
+        </button>
+        <div id="network-info-pill" class="network-pill">Connecting to Station...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. MULTIPLAYER LOBBY SCREEN -->
+  <div id="screen-lobby" class="screen-overlay hidden">
+    <div class="cyber-card lobby-container">
+      <div class="lobby-header">
+        <div>
+          <div class="event-badge">AETHERIA SECTOR-07 DOCKING HUB</div>
+          <h2 style="font-family: var(--font-title); font-size: 1.4rem;">STATION ROSTER</h2>
+        </div>
+        <div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-align: right;">ROOM ACCESS CODE</div>
+          <div id="lobby-room-code" class="room-code-badge">----</div>
+        </div>
+      </div>
+
+      <div id="lobby-players-list" class="lobby-players-grid">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="lobby-footer">
+        <div id="lobby-status-msg" style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--neon-cyan);">
+          Waiting for operatives to prepare...
+        </div>
+        <div class="lobby-actions">
+          <button id="btn-lobby-add-bot" class="cyber-btn" style="border-color: var(--neon-amber); color: var(--neon-amber);">
+            <span>🤖</span> ADD AI BOT
+          </button>
+          <button id="btn-lobby-ready" class="cyber-btn">
+            READY UP ✓
+          </button>
+          <button id="btn-lobby-start" class="cyber-btn primary">
+            LAUNCH MATCH 🚀
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. IN-GAME HUD OVERLAY -->
+  <div id="screen-game" class="hidden">
+    <!-- Persistent HUD Role Pill (Top-Left: Crewmate vs Impostor) -->
+    <div id="hud-role-pill" class="hud-role-pill crewmate">
+      <span id="hud-role-icon">🛡️</span>
+      <div class="hud-role-meta">
+        <span id="hud-role-text">CREWMATE</span>
+        <small id="hud-role-sub">Tasks &amp; Survival</small>
+      </div>
+    </div>
+
+    <!-- Top Bar: Task Progress & Sabotage Status -->
+    <div class="hud-top-bar">
+      <div class="hud-task-progress-box">
+        <div id="hud-task-text" class="hud-task-label">FACILITY CALIBRATION PROGRESS: 0/0 (0%)</div>
+        <div class="hud-task-track">
+          <div id="hud-task-fill" class="hud-task-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flashing Sabotage Alert -->
+    <div id="sabotage-alert-banner" class="sabotage-alert hidden"></div>
+
+    <!-- Secret Role Reveal Banner -->
+    <div id="role-reveal-banner" class="role-reveal-banner hidden"></div>
+
+    <!-- Mobile Virtual Joystick Zone -->
+    <div id="virtual-joystick-zone" class="virtual-joystick-zone">
+      <div id="joystick-knob" class="joystick-knob"></div>
+    </div>
+
+    <!-- Action Buttons Dock -->
+    <div class="hud-actions-dock">
+      <button id="btn-action-use" class="action-btn">
+        <span>🔧</span> USE (E)
+      </button>
+      <button id="btn-action-report" class="action-btn report-btn">
+        <span>🚨</span> REPORT (R)
+      </button>
+      <button id="btn-action-kill" class="action-btn kill-btn hidden">
+        <span>⚔️</span> NEUTRALIZE (Q)
+      </button>
+      <button id="btn-action-sabotage" class="action-btn kill-btn hidden">
+        <span>💥</span> SABOTAGE
+      </button>
+      <button id="btn-action-vent" class="action-btn hidden" style="border-color: #38bdf8; color: #38bdf8;">
+        <span>🌀</span> VENT (SPACE)
+      </button>
+      <button id="btn-action-emergency" class="action-btn emergency-btn">
+        <span>🔴</span> EMERGENCY
+      </button>
+    </div>
+  </div>
+
+  <!-- 4. SABOTAGE WHEEL MODAL -->
+  <div id="sabotage-wheel" class="sabotage-wheel hidden">
+    <h3>INFILTRATOR SABOTAGE GRID</h3>
+    <div class="sabotage-grid">
+      <button class="sabotage-option-btn" data-type="meltdown">
+        <div>⚠️ REACTOR</div>
+        <small>Critical 35s Detonation</small>
+      </button>
+      <button class="sabotage-option-btn" data-type="blackout">
+        <div>💡 BLACKOUT</div>
+        <small>Dim Station Vision</small>
+      </button>
+      <button class="sabotage-option-btn" data-type="comms">
+        <div>📶 COMMS JAM</div>
+        <small>Disable Radar/Tasks</small>
+      </button>
+      <button class="sabotage-option-btn" data-type="doors">
+        <div>🔒 LOCKDOWN</div>
+        <small>Seal Bulkheads (12s)</small>
+      </button>
+    </div>
+    <button id="btn-close-sabotage" class="cyber-btn" style="width: 100%; padding: 8px;">CANCEL</button>
+  </div>
+
+  <!-- 5. INTERACTIVE TASK MODAL -->
+  <div id="task-modal" class="task-modal hidden">
+    <div class="cyber-card task-window">
+      <div class="task-window-header">
+        <h3 id="task-title">TERMINAL INTERFACE</h3>
+        <button id="task-close-btn" class="task-close-btn">✕</button>
+      </div>
+      <div id="task-container" class="task-container">
+        <!-- Rendered by TaskManager -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. EMERGENCY TRIBUNAL & MEETING SCREEN -->
+  <div id="screen-meeting" class="screen-overlay hidden">
+    <div class="cyber-card meeting-container">
+      <div class="meeting-header">
+        <h2 id="meeting-title">EMERGENCY TRIBUNAL CONVENED</h2>
+        <p id="meeting-subtitle">Discussion in progress. Identify hidden saboteurs.</p>
+        <div id="meeting-timer" class="meeting-timer-badge">DISCUSSION: 15s</div>
+      </div>
+
+      <div class="meeting-layout">
+        <!-- Player Roster & Voting -->
+        <div id="meeting-roster" class="meeting-roster">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Integrated Real-Time Meeting Chat -->
+        <div class="meeting-chat-box">
+          <div id="chat-messages" class="chat-history"></div>
+
+          <!-- Exhibition Quick Chat Preset Pills -->
+          <div class="quick-chat-row">
+            <button class="quick-chat-pill">Where was the body?</button>
+            <button class="quick-chat-pill">I was fixing Reactor</button>
+            <button class="quick-chat-pill">Saw someone venting!</button>
+            <button class="quick-chat-pill">Skip vote for now</button>
+            <button class="quick-chat-pill">Suspect is near Bio-Lab</button>
+          </div>
+
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Type transmission..." maxlength="80">
+            <button id="btn-send-chat">SEND</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. EJECTION CINEMATIC SCREEN -->
+  <div id="screen-ejection" class="screen-overlay hidden">
+    <div class="ejection-container">
+      <h1 id="ejection-text">OPERATIVE EJECTED</h1>
+      <p id="ejection-subtext">They were an INFILTRATOR.</p>
+    </div>
+  </div>
+
+  <!-- 8. GAME OVER / VICTORY SCREEN -->
+  <div id="screen-gameover" class="screen-overlay hidden">
+    <div class="cyber-card gameover-container">
+      <div class="event-badge">MATCH CONCLUDED</div>
+      <h1 id="gameover-title">FACILITY SECURED</h1>
+      <p id="gameover-reason" style="color: var(--text-muted); font-size: 1.1rem; margin-top: 8px;">All saboteurs neutralized.</p>
+
+      <div id="gameover-roster" class="gameover-roster">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div style="font-family: var(--font-mono); color: var(--neon-cyan); margin-top: 20px;">
+        Returning to docking hub in 10 seconds...
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. HOW TO PLAY EXHIBITION MODAL -->
+  <div id="modal-how-to-play" class="task-modal hidden">
+    <div class="cyber-card task-window" style="max-width: 640px;">
+      <div class="task-window-header">
+        <h3>HOW TO PLAY | MGM SYNERGY 2026</h3>
+        <button id="btn-close-how-to-play" class="task-close-btn">✕</button>
+      </div>
+      <div style="padding: 24px; max-height: 480px; overflow-y: auto; text-align: left; font-size: 0.95rem; line-height: 1.6;">
+        <h4 style="color: var(--neon-cyan); margin-bottom: 8px;">1. SETTING & FACTIONS</h4>
+        <p>Aetheria Deep-Space Bio-Neural Facility (Sector-07). At match start, players are secretly assigned roles:</p>
+        <ul style="margin: 8px 0 16px 20px;">
+          <li><strong style="color: var(--neon-cyan);">RESEARCH OPERATIVES:</strong> Complete 8 interactive calibration tasks around the station and vote out the hidden impostors.</li>
+          <li><strong style="color: var(--alert-red);">INFILTRATORS:</strong> Secretly eliminate operatives in isolated corridors and trigger sabotages.</li>
+        </ul>
+
+        <h4 style="color: var(--neon-cyan); margin-bottom: 8px;">2. INTERACTIVE TASKS</h4>
+        <p>Approach consoles (yellow beacons) and press <strong>E</strong> or tap <strong>USE</strong>:</p>
+        <ul style="margin: 8px 0 16px 20px;">
+          <li><strong>Circuit Matrix:</strong> Connect matching colored cables across terminals.</li>
+          <li><strong>Quantum Core:</strong> Adjust harmonic slider to match station resonance wave.</li>
+          <li><strong>Security Cypher:</strong> Enter 5-digit encrypted passcode from badge.</li>
+          <li><strong>Bio-Sample Centrifuge:</strong> Detect & sterilize the mutated vial.</li>
+          <li><strong>Memory Reboot:</strong> Simon-says style pattern reproduction.</li>
+          <li><strong>Array Alignment:</strong> Turn antenna dial to lock 100% signal.</li>
+        </ul>
+
+        <h4 style="color: var(--alert-red); margin-bottom: 8px;">3. SABOTAGE & EMERGENCIES</h4>
+        <p>Infiltrators can trigger station emergencies. <strong>Reactor Meltdown</strong> gives operatives 35 seconds to reach both terminals (A & B) and press overrides, or Infiltrators win!</p>
+
+        <h4 style="color: var(--neon-amber); margin-bottom: 8px;">4. MEETINGS & TRIBUNALS</h4>
+        <p>Report fallen bodies or call an Emergency Tribunal from the Central Nexus. Living players debate in chat and vote on who to eject into deep space.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.IO & Client Game Scripts -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/tasks.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

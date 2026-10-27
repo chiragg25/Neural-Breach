@@ -1,0 +1,24 @@
+{
+  "name": "neural-breach-synergy2026",
+  "version": "1.0.0",
+  "description": "Multiplayer Social-Deduction Game for MGM SYNERGY 2026",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "multiplayer",
+    "social-deduction",
+    "socketio",
+    "synergy2026",
+    "canvas-game"
+  ],
+  "author": "MGM SYNERGY 2026 Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.4"
+  }
+}
